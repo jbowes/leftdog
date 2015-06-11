@@ -1,0 +1,24 @@
+{
+  "name": "leftdog",
+  "description": "Leftronic and Datadog integration",
+  "keywords": [
+    "datadog",
+    "leftronic",
+    "webhooks",
+    "python"
+  ],
+  "repository": "https://github.com/jbowes/leftdog",
+  "env": {
+    "AUTH_USERNAME": {
+      "description": "Username for leftronic to authenticate with",
+      "generator": "secret"
+    },
+    "AUTH_PASSWORD": {
+      "description": "Password for leftronic to authenticate with",
+      "generator": "secret"
+    },
+    "DATADOG_API_KEY": {
+      "description": "Datadog API key to post events.",
+    }
+  }
+}
