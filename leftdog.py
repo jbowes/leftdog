@@ -5,7 +5,7 @@ import logging
 import os
 import sys
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import falcon
 import requests
@@ -28,8 +28,58 @@ class ResponseLoggerMiddleware(object):
 
 class LeftdogResource:
 
-    def on_get(self, req, resp):
-        resp = falcon.HTTP_200
+    def on_get(self, req, resp, resp_type):
+        units = req.params["units"]
+        count = req.params.get("count", 1)
+        query = req.params["q"]
+        should_round = req.params.get("round", "false").lower() in ["true", "t"]
+        op = req.params.get("op", "avg").lower()
+        if op not in ["avg", "sum"]:
+            resp.body=json.dumps({"error": "op must be one of avg or sum"})
+            resp.status = falcon.HTTP_400
+            return
+
+        end = datetime.utcnow()
+        start = end - timedelta(**{units: count})
+
+        dd_resp = requests.get("https://app.datadoghq.com/api/v1/query",
+            params={
+            "api_key": DATADOG_API_KEY,
+            "application_key": DATADOG_APP_KEY,
+            "from": int(start.strftime("%s")),
+            "to": int(end.strftime("%s")),
+            "query": query,
+            })
+
+        data = dd_resp.json()
+        #print data
+
+        group_by = None
+        if "group_by" in data and len(data["group_by"]) > 0:
+            group_by = data["group_by"][0]
+
+        if resp_type == "number":
+            points = data["series"][0]["pointlist"]
+            avg = sum([x[1] or 0 for x in points])
+            if op == "avg":
+                avg /= data["series"][0]["length"]
+            if should_round:
+                avg = round(avg)
+            resp.body = json.dumps({"number": avg})
+        elif resp_type == "pie":
+            pie = {"chart": []}
+            for series in data["series"]:
+                scope = dict([x.split(":") for x in series["scope"].split(",")])
+                points = series["pointlist"]
+                total = sum([x[1] or 0 for x in points])
+                pie["chart"].append({
+                    "name": scope[group_by],
+                    "value": int(total),
+                    })
+
+            resp.body = json.dumps(pie)
+
+        resp.status = falcon.HTTP_200
 
 
 def configure():
@@ -55,4 +105,4 @@ configure()
 app = falcon.API(middleware=[
     ResponseLoggerMiddleware(),
     ])
-app.add_route("/", LeftdogResource())
+app.add_route("/v0/{resp_type}/", LeftdogResource())
