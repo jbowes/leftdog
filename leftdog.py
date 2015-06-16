@@ -51,8 +51,8 @@ class LeftdogResource:
             "query": query,
             })
 
+        log.info("DD response: %d", dd_resp.status_code)
         data = dd_resp.json()
-        #print data
 
         group_by = None
         if "group_by" in data and len(data["group_by"]) > 0:
