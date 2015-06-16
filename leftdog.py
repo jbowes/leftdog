@@ -30,7 +30,7 @@ class LeftdogResource:
 
     def on_get(self, req, resp, resp_type):
         units = req.params["units"]
-        count = req.params.get("count", 1)
+        count = int(req.params.get("count", 1))
         query = req.params["q"]
         should_round = req.params.get("round", "false").lower() in ["true", "t"]
         op = req.params.get("op", "avg").lower()
