@@ -1,5 +1,6 @@
 # coding=utf-8
 
+import base64
 import json
 import logging
 import os
@@ -18,6 +19,26 @@ AUTH_PASSWORD = os.environ.get("AUTH_PASSWORD")
 DATADOG_API_KEY = os.environ.get("DATADOG_API_KEY")
 DATADOG_APP_KEY = os.environ.get("DATADOG_APP_KEY")
 
+
+class AuthMiddleware(object):
+
+    def __init__(self):
+        self.auth = base64.b64encode(AUTH_USERNAME + ":" + AUTH_PASSWORD)
+
+    def process_request(self, req, resp):
+        header = req.get_header("Authorization")
+
+        if header is None:
+            raise falcon.HTTPUnauthorized("Authorization required",
+                    "Authorization header missing")
+
+        if not self._auth_is_valid(header):
+            raise falcon.HTTPUnauthorized("Invalid Authorization",
+                    "Authorization header does not match")
+
+    def _auth_is_valid(self, auth):
+        auth_type, value = auth.split(" ")
+        return auth_type.lower() == "basic" and value == self.auth
 
 class ResponseLoggerMiddleware(object):
 
@@ -56,7 +77,7 @@ class LeftdogResource:
 
         group_by = None
         if "group_by" in data and len(data["group_by"]) > 0:
-            group_by = data["group_by"][0]
+            group_by = data["group_by"]
 
         if resp_type == "number":
             points = data["series"][0]["pointlist"]
@@ -70,10 +91,11 @@ class LeftdogResource:
             pie = {"chart": []}
             for series in data["series"]:
                 scope = dict([x.split(":") for x in series["scope"].split(",")])
+                name = " ".join([scope[x] for x in group_by])
                 points = series["pointlist"]
                 total = sum([x[1] or 0 for x in points])
                 pie["chart"].append({
-                    "name": scope[group_by],
+                    "name": name,
                     "value": int(total),
                     })
 
@@ -103,6 +125,7 @@ log.setLevel(logging.INFO)
 configure()
 
 app = falcon.API(middleware=[
+    AuthMiddleware(),
     ResponseLoggerMiddleware(),
     ])
 app.add_route("/v0/{resp_type}/", LeftdogResource())
